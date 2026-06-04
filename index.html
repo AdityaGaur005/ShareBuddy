@@ -18,9 +18,16 @@
 
   <style>
     @keyframes fade-in {
-      from { opacity: 0; transform: translateY(10px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
+
     .animate-fade-in {
       animation: fade-in 0.3s ease;
     }
@@ -36,7 +43,7 @@
     const FileUploader = () => {
       const [file, setFile] = useState(null);
       const [uploadStatus, setUploadStatus] = useState(null);
-      const [downloadLink, setDownloadLink] = useState('');
+      const [shareLink, setShareLink] = useState('');
       const fileInputRef = useRef();
 
       const handleFileSelect = (e) => {
@@ -45,31 +52,51 @@
         }
       };
 
+      const copyToClipboard = async () => {
+        try {
+          await navigator.clipboard.writeText(shareLink);
+          alert("✅ URL copied to clipboard!");
+        } catch (err) {
+          console.error("Failed to copy:", err);
+          alert("❌ Failed to copy URL");
+        }
+      };
+
       const handleUpload = async () => {
         if (!file) return;
+
+        setShareLink('');
         setUploadStatus('uploading');
 
         try {
-          // Step 1: Get the presigned upload URL
-          const uploadRes = await fetch("https://t01cm5dmbi.execute-api.ap-south-1.amazonaws.com/uploads", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              filename: file.name,
-              contentType: file.type
-            })
-          });
+          // Step 1: Get Presigned Upload URL + Short Code
+          const uploadRes = await fetch(
+            "https://t01cm5dmbi.execute-api.ap-south-1.amazonaws.com/uploads",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                filename: file.name,
+                contentType: file.type
+              })
+            }
+          );
 
           const uploadData = await uploadRes.json();
-          const { uploadUrl, fileKey } = uploadData;
 
-          if (!uploadUrl || !fileKey) {
+          const {
+            uploadUrl,
+            fileKey,
+            shortCode
+          } = uploadData;
+
+          if (!uploadUrl || !fileKey || !shortCode) {
             throw new Error("Failed to generate upload URL");
           }
 
-          // Step 2: Upload file to S3
+          // Step 2: Upload file directly to S3
           const putResp = await fetch(uploadUrl, {
             method: "PUT",
             headers: {
@@ -82,24 +109,17 @@
             throw new Error("Failed to upload file to S3");
           }
 
-          // Step 3: Get download link using fileKey
-          const downloadRes = await fetch("https://t01cm5dmbi.execute-api.ap-south-1.amazonaws.com/download", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ fileKey })
-          });
+          // Step 3: Generate Shareable Short URL
+          const shortUrl =
+            `https://t01cm5dmbi.execute-api.ap-south-1.amazonaws.com/file/${shortCode}`;
 
-          const downloadData = await downloadRes.json();
+          setShareLink(shortUrl);
 
-          if (downloadData.downloadUrl) {
-            setDownloadLink(downloadData.downloadUrl);
-            setUploadStatus('success');
-            setFile(null);
+          setUploadStatus('success');
+          setFile(null);
+
+          if (fileInputRef.current) {
             fileInputRef.current.value = '';
-          } else {
-            throw new Error("Error generating download link");
           }
 
         } catch (err) {
@@ -112,15 +132,30 @@
 
       return (
         <div className="bg-white w-full max-w-xl border rounded-2xl p-6 shadow-xl">
-          <h1 className="text-3xl font-bold text-center text-purple-700 mb-6">🐼 ShareBuddy</h1>
+          <h1 className="text-3xl font-bold text-center text-purple-700 mb-6">
+            🐼 ShareBuddy
+          </h1>
 
           <div className="border-4 border-dashed border-gray-300 rounded-lg p-6 text-center mb-4">
             <i className="fas fa-cloud-upload-alt text-4xl text-purple-600 mb-3"></i>
-            <p className="text-gray-700 mb-2">Drag and drop or click to select a file:</p>
-            <button onClick={() => fileInputRef.current.click()} className="bg-purple-600 text-white font-semibold px-6 py-2 rounded-full hover:bg-purple-700">
+
+            <p className="text-gray-700 mb-2">
+              Drag and drop or click to select a file:
+            </p>
+
+            <button
+              onClick={() => fileInputRef.current.click()}
+              className="bg-purple-600 text-white font-semibold px-6 py-2 rounded-full hover:bg-purple-700"
+            >
               Choose File
             </button>
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileSelect}
+            />
           </div>
 
           {file && (
@@ -145,23 +180,34 @@
                 : 'bg-gray-300 cursor-not-allowed'
             } text-white`}
           >
-            {
-              uploadStatus === 'uploading'
-                ? 'Uploading...'
-                : uploadStatus === 'success'
-                ? 'File Uploaded ✅'
-                : uploadStatus === 'error'
-                ? 'Upload Failed ❌'
-                : 'Upload File'
-            }
+            {uploadStatus === 'uploading'
+              ? 'Uploading...'
+              : uploadStatus === 'success'
+              ? 'File Uploaded ✅'
+              : uploadStatus === 'error'
+              ? 'Upload Failed ❌'
+              : 'Upload File'}
           </button>
 
-          {downloadLink && (
-            <div className="mt-6 p-3 border rounded bg-green-50 text-center animate-fade-in">
-              <p className="text-green-700 font-semibold mb-2">✅ File uploaded successfully!</p>
-              <a href={downloadLink} download target="_blank" rel="noopener noreferrer" className="text-blue-800 underline text-sm break-all">
-                {downloadLink}
-              </a>
+          {shareLink && (
+            <div className="mt-6 p-4 border rounded bg-green-50 animate-fade-in">
+              <p className="text-green-700 font-semibold mb-3 text-center">
+                ✅ File uploaded successfully!
+              </p>
+
+              <div className="bg-white border rounded p-3 text-sm break-all mb-3">
+                {shareLink}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={copyToClipboard}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+                >
+                  <i className="fas fa-copy mr-2"></i>
+                  Copy URL
+                </button>
+              </div>
             </div>
           )}
         </div>
