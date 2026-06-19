@@ -24,16 +24,18 @@ body{background:#020617;}
 <div class="glow glow2"></div>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
-function App() {
-  return <h1>ShareBuddy</h1>;
-}
-
+<script>
 const root = ReactDOM.createRoot(
   document.getElementById("root")
 );
 
-root.render(<App />);
+root.render(
+  React.createElement(
+    "h1",
+    { style: { color: "white" } },
+    "ShareBuddy"
+  )
+);
 </script>
 </body>
 </html>
