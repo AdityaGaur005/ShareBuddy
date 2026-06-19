@@ -25,9 +25,15 @@ body{background:#020617;}
 <div id="root"></div>
 
 <script type="text/babel">
-document.getElementById("root").innerHTML =
-"<h1 style='color:white'>TEST</h1>";
-</script>
+function App() {
+  return <h1>ShareBuddy</h1>;
+}
+
+const root = ReactDOM.createRoot(
+  document.getElementById("root")
+);
+
+root.render(<App />);
 </script>
 </body>
 </html>
